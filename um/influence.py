@@ -278,23 +278,3 @@ def get_self_influence_light(ds, checkpoint_paths, get_model=None, binary=False,
             'predicted_labels': np.concatenate(predicted_labels_np)
             }
 
-# sotos suggestions
-# decorrelate the factor from the shape - shape classifaction instead -> rapid prototype
-# brightness is a toy
-# think of a more complex augmentation
-# the artifact can be anything
-
-# fine grained task allocation - goal for each week - not test and evaluate learning
-# spend one day to make the intensity task harder
-
-# all data you draw are from light
-# and sample from dark in the training set
-# balance in the light/dark samples
-
-# think about not required for generalisation
-# type d can combine a, b, c.
-
-# quick tests
-# change the outcome task -> not based on intensity
-# before end of the week - based on the toy how will we test for a, b, c, d
-# are the wrong because the toy in too simple
