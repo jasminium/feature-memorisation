@@ -23,14 +23,7 @@ aug_32_32 = keras.Sequential([
     # layers.RandomRotation(0.2)
 ])
 
-# augmentation for chexpert
-aug_32_32 = keras.Sequential([
-    layers.RandomContrast(0.2, input_shape=(32, 32, 3)),
-    layers.RandomCrop(31, 31),
-    layers.Resizing(32, 32),
-    layers.RandomFlip("horizontal"),
-    # layers.RandomRotation(0.2)
-])
+
 
 def get_cnn1():
 
@@ -412,35 +405,46 @@ def get_dense():
     return model
 
 
-def get_densenet121():
+def get_densenet121(input_shape=None, preprocessing=None, n_outputs=None, activation='sigmoid'):
     
-    image_size = 224
     freeze_cnn = True
-    n_outputs = 1
 
     from keras.applications.densenet import DenseNet121
 
-    base_model = DenseNet121(include_top=False, input_shape=(image_size,image_size,3), weights='imagenet')
-
-    # add a global spatial average pooling layer
-    x = base_model.output
-    x = keras.layers.GlobalAveragePooling2D(input_shape=(1024,1,1))(x)
-    # Add a flattern layer 
-    x = Dense(2048, activation='relu')(x)
-    x = BatchNormalization()(x)
-    x = Dropout(0.2)(x)
-    # Add a fully-connected layer
-    x = Dense(512, activation='relu')(x)
-    x = BatchNormalization()(x)
-    x = Dropout(0.2)(x)
-    # and a logistic layer --  we have 5 classes
-    predictions = Dense(n_outputs, activation='sigmoid')(x)
-    
-    # this is the model we will train
-    model = Model(inputs=base_model.input, outputs=predictions)
+    base_model = DenseNet121(include_top=False, input_shape=input_shape, weights='imagenet')
 
     if freeze_cnn:
         for layer in base_model.layers:
             layer.trainable = False
 
+    model = tf.keras.models.Sequential([
+        preprocessing,
+        base_model,
+        # Add two layer classifier
+        keras.layers.GlobalAveragePooling2D(input_shape=(1024, 1, 1)),
+        # Add a flattern layer 
+        Dense(2048, activation='relu'),
+        BatchNormalization(),
+        Dropout(0.2),
+        # Add a fully-connected layer
+        Dense(512, activation='relu'),
+        BatchNormalization(),
+        Dropout(0.2),
+        # and a logistic layer --  we have 5 classes
+        Dense(n_outputs, activation=activation)
+    ])
+
+    return model
+
+def get_densenet121_chexpert():
+    input_shape = (224, 224, 3)
+
+    seq = tf.keras.Sequential([
+        tf.keras.layers.Normalization(mean=0.5330, variance=0.0349, input_shape=input_shape),
+        #layers.RandomContrast(0.2),
+        #layers.RandomCrop(31, 31),
+        layers.RandomFlip("horizontal"),
+    ])
+
+    model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=1, activation='sigmoid')
     return model
