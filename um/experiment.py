@@ -25,6 +25,9 @@ from influence import get_hardness
 from influence import get_precomputed_cscore
 from metrics import metric_2, metric_3_alt, metric_7, metric_9, metric_10, metric_11, metric_6, metric_12, metric_13, metric_14, metric_15
 
+
+tf_datasets = ['chexpert']
+
 def run(
         exp_name='new_experiment',
         epochs=100,
@@ -67,7 +70,9 @@ def run(
         artifacter_eval=None,
         run_memorisation_per_epoch=False,
         cosine_feature_sim=False,
-        save_activations=False
+        save_activations=False,
+        batch_position=None,
+        dataset_name=None,
 ):
     
     #set_seed()
@@ -385,13 +390,23 @@ def run(
             pickle.dump(track_influences, file_pi)
 
         return
+    
+    def setup_train_with_augmentation_on_index_tf(indx, run=0, artifact=None, log_dir=None):
+        ds = get_dataset(indx, artifacter.artifact, batch_size=batch_size, log_dir=log_dir)
+        return ds
 
-    def train_with_augmentation_on_index(indx, run=0, artifact=None):
+    def setup_train_with_augmentation_on_index(indx, run=0, artifact=None, log_dir=None):
 
-        log_dir = log_dir_base + f'/{run}/train_with_augmentation_on_index'
+        ds = get_dataset()
 
         (train_images, train_labels, test_images,
-            test_labels) = get_dataset()
+            test_labels) = ds
+
+        # manipulate the batch that the unique feature appears in
+        if batch_position is not None:
+            n_indx = batch_size * batch_position
+            train_images[n_indx], train_images[indx] = train_images[indx], train_images[n_indx] 
+            train_labels[n_indx], train_labels[indx] = train_labels[indx], train_labels[n_indx] 
 
         # re-scale 0-1
         train_images = train_images / 255.0
@@ -404,7 +419,7 @@ def run(
 
         # log augmented image
         show_image(train_images[indx], log_dir=log_dir,
-                   message=f'augmented (pre-processed) i={indx}, label={train_labels[indx]}')
+                message=f'augmented (pre-processed) i={indx}, label={train_labels[indx]}')
 
         # normalise images after applying unique feature.
         train_images = normalise(train_images, mean, std)
@@ -412,18 +427,31 @@ def run(
 
         # log augmented processed image
         show_image(train_images[indx], log_dir=log_dir,
-                   message=f'augmented (post-process) i={indx}, label={train_labels[indx]}')
+                message=f'augmented (post-process) i={indx}, label={train_labels[indx]}')
 
         print('Create tf datasets')
-        dataset_unbatched = tf.data.Dataset.from_tensor_slices(
+        dataset = tf.data.Dataset.from_tensor_slices(
             (train_images, train_labels))
         dataset_val = tf.data.Dataset.from_tensor_slices(
             (test_images, test_labels))
 
-        dataset = dataset_unbatched.batch(batch_size)
+        dataset = dataset.batch(batch_size)
         dataset_val = dataset_val.batch(batch_size)
+    
+        return dataset, dataset_val
 
-        model, history = fit(dataset, dataset_val, train_images, test_images,
+    def train_with_augmentation_on_index(indx, run=0, artifact=None):
+
+        log_dir = log_dir_base + f'/{run}/train_with_augmentation_on_index'
+
+        if dataset_name in [tf_datasets]:
+            ds = setup_train_with_augmentation_on_index(indx, run=0, artifact=None, log_dir=log_dir)
+        else:
+            ds = setup_train_with_augmentation_on_index_tf(indx, run=0, artifact=None, log_dir=log_dir)
+
+        dataset, dataset_val = ds
+
+        model, history = fit(dataset, dataset_val, None, None,
                              save_checkpoints=False, log_dir=log_dir, is_prediction_callback=False, memorisation_callback=run_memorisation_per_epoch, run=run)
 
         # persist

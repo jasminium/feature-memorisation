@@ -50,10 +50,7 @@ def metric_10(output_2, output_3):
     return np.mean(js)
 
 def metric_11(output_1):
-    if output_1.shape[0] == 1:
-        e = stats.entropy(output_1.flatten())        
-    else:
-        e = stats.entropy(output_1, axis=1)
+    e = stats.entropy(output_1, axis=1)
     me = e.mean()
     return me
 

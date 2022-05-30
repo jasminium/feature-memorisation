@@ -123,9 +123,14 @@ def show_image(image, log_dir=None, message='Image', epoch=0):
     if log_dir is not None:
         file_writer = tf.summary.create_file_writer(log_dir)
         with file_writer.as_default():
-            # Don't forget to reshape.
+            
+            if len(image.shape) == 2:
+                image = np.stack([image]*3, -1)
+            
+            # rank 4 for tensorboard
             image = np.reshape(
                 image, (-1, image.shape[0], image.shape[1], image.shape[2]))
+            
             tf.summary.image(message, image, step=epoch)
 
 

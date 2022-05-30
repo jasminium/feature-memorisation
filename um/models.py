@@ -23,6 +23,15 @@ aug_32_32 = keras.Sequential([
     # layers.RandomRotation(0.2)
 ])
 
+# augmentation for chexpert
+aug_32_32 = keras.Sequential([
+    layers.RandomContrast(0.2, input_shape=(32, 32, 3)),
+    layers.RandomCrop(31, 31),
+    layers.Resizing(32, 32),
+    layers.RandomFlip("horizontal"),
+    # layers.RandomRotation(0.2)
+])
+
 def get_cnn1():
 
     tf.keras.backend.clear_session()
@@ -399,5 +408,39 @@ def get_dense():
     # instantiate and compile model
     # orig paper uses SGD but RMSprop works better for DenseNet
     model = Model(inputs=inputs, outputs=outputs)
+
+    return model
+
+
+def get_densenet121():
+    
+    image_size = 224
+    freeze_cnn = True
+    n_outputs = 1
+
+    from keras.applications.densenet import DenseNet121
+
+    base_model = DenseNet121(include_top=False, input_shape=(image_size,image_size,3), weights='imagenet')
+
+    # add a global spatial average pooling layer
+    x = base_model.output
+    x = keras.layers.GlobalAveragePooling2D(input_shape=(1024,1,1))(x)
+    # Add a flattern layer 
+    x = Dense(2048, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.2)(x)
+    # Add a fully-connected layer
+    x = Dense(512, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.2)(x)
+    # and a logistic layer --  we have 5 classes
+    predictions = Dense(n_outputs, activation='sigmoid')(x)
+    
+    # this is the model we will train
+    model = Model(inputs=base_model.input, outputs=predictions)
+
+    if freeze_cnn:
+        for layer in base_model.layers:
+            layer.trainable = False
 
     return model
