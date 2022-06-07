@@ -20,6 +20,10 @@ mnist_mean = 0.1307
 mnist_std = 0.3081
 cifar10_mean = (0.4914, 0.4822, 0.4465)
 cifar10_std = (0.2470, 0.2435, 0.2616)
+caltech101_mean = (0.485, 0.456, 0.406)
+caltech101_std = (0.229, 0.224, 0.225)
+celeba_hair_colour_mean = (0.51266193, 0.42907502, 0.38056787)
+celeba_hair_colour_std = (0.310936, 0.29136387, 0.2896983 )
 
 artifact = np.array([
     [0, 0, 1, 0, 0],
@@ -102,10 +106,25 @@ def get_cifar_10_grayscale():
 
     return train_images, train_labels, None, None
 
+def r_split(images, labels, split):
+    n = len(labels)
+    indxs = np.arange(0, len(labels))
+    np.random.shuffle(indxs)
+    images = images[indxs]
+    labels = labels[indxs]
+    s = int(n * split)
+    train_images, test_images = images[:s], images[s:]
+    train_labels, test_labels = labels[:s], labels[s:]
+    return train_images, train_labels, test_images, test_labels
+
 def get_caltech101():
-    import tensorflow_datasets as tfds
-    ds = tfds.load('chexpert')
-    return ds
+    home = Path.home()
+    d =  home / 'tensorflow_datasets/downloads/manual/caltech-101/caltech101/101_ObjectCategories'
+    train_images = np.load(d.parent / 'train_images.npy')
+    train_labels = np.load(d.parent / 'train_labels.npy')
+    test_images = np.load(d.parent / 'test_images.npy')
+    test_labels = np.load(d.parent / 'test_labels.npy')
+    return train_images, train_labels, test_images, test_labels
 
 def get_chexpert(aug_indx, artifact, batch_size=32, log_dir=None):
 
@@ -223,8 +242,8 @@ def get_chexpert_binary(aug_indx, artifact, batch_size=32, log_dir=None):
     # target image size
     image_size = 224
 
-    n = 50000
-    aug_indx = 0
+    #n = 50000
+    #aug_indx = 0
 
     labels = [
         'Normal',
@@ -250,7 +269,7 @@ def get_chexpert_binary(aug_indx, artifact, batch_size=32, log_dir=None):
     home = str(Path.home())
     data_path = f'{home}/tensorflow_datasets/downloads/manual/'
 
-    train_df = pd.read_csv(f'{data_path}CheXpert-v1.0-small/train.csv')[:n]
+    train_df = pd.read_csv(f'{data_path}CheXpert-v1.0-small/train.csv')
     valid_df = pd.read_csv(f'{data_path}CheXpert-v1.0-small/valid.csv')
 
     print(len(train_df), 'train records')
@@ -302,12 +321,7 @@ def get_chexpert_binary(aug_indx, artifact, batch_size=32, log_dir=None):
 
     datagen = image_pre.ImageDataGenerator(
         rescale=1./255,
-        #featurewise_center=True,
-        #featurewise_std_normalization=True,
-        #width_shift_range=1,
-        #height_shift_range=1,
-        #horizontal_flip=True,
-        validation_split=0.1
+        validation_split=0.2
     )
     
     train_generator = datagen.flow_from_dataframe(
@@ -331,6 +345,155 @@ def get_chexpert_binary(aug_indx, artifact, batch_size=32, log_dir=None):
                                                 target_size=(image_size,image_size),
                                                 batch_size=batch_size,
                                                 subset = "validation")
+    
+    datasets = train_generator, valid_generator
+
+    return datasets
+
+
+
+def get_celeba_hair_color(aug_indx, artifact, batch_size=32, log_dir=None):
+
+    img_size = (224, 224)
+
+    home = Path.home()
+    d =  home / 'tensorflow_datasets/downloads/manual/celeba/'
+
+    labels = [
+        'Black_Hair',
+        'Blond_Hair',
+        'Brown_Hair',
+        'Gray_Hair']
+
+    try:
+        df = pd.read_csv(d / 'cached.csv')
+
+    except:
+        partition = d / 'list_eval_partition.txt'
+        annotations = d / 'list_attr_celeba.txt'
+
+        fields = [
+            'filename',
+            '5_o_Clock_Shadow',
+            'Arched_Eyebrows',
+            'Attractive',
+            'Bags_Under_Eyes',
+            'Bald',
+            'Bangs',
+            'Big_Lips',
+            'Big_Nose',
+            'Black_Hair',
+            'Blond_Hair',
+            'Blurry',
+            'Brown_Hair',
+            'Bushy_Eyebrows',
+            'Chubby',
+            'Double_Chin',
+            'Eyeglasses',
+            'Goatee',
+            'Gray_Hair',
+            'Heavy_Makeup',
+            'High_Cheekbones',
+            'Male',
+            'Mouth_Slightly_Open',
+            'Mustache',
+            'Narrow_Eyes',
+            'No_Beard',
+            'Oval_Face',
+            'Pale_Skin',
+            'Pointy_Nose',
+            'Receding_Hairline',
+            'Rosy_Cheeks',
+            'Sideburns',
+            'Smiling',
+            'Straight_Hair',
+            'Wavy_Hair',
+            'Wearing_Earrings',
+            'Wearing_Hat',
+            'Wearing_Lipstick',
+            'Wearing_Necklace',
+            'Wearing_Necktie',
+            'Young'
+        ]
+
+        df1 = pd.read_csv(partition, sep='\s', header=None, names=['filename', 'split'])
+        df2 = pd.read_csv(annotations, sep='\s+', header=None, names=fields, skiprows=2)
+        df = df1.merge(df2)
+
+        df = df[['filename', 'split', 'Black_Hair', 'Blond_Hair', 'Brown_Hair', 'Gray_Hair']]
+
+        # extract data where hair colour is labelled.
+        df = df.loc[
+            (df['Black_Hair'] == 1) |
+            (df['Blond_Hair'] == 1) |
+            (df['Brown_Hair'] == 1) |
+            (df['Gray_Hair'] == 1)]
+
+        def labeller(x):
+            x = x.loc[labels]
+            c = x[x == 1].index.to_numpy()[0]
+            return c
+
+        df['Label'] = df.apply(labeller, axis=1)
+
+        df.to_csv(d / 'cached.csv')
+
+    df_train = df.loc[df['split'] == 0]
+    df_train.reset_index(drop=True, inplace=True)
+    df_val = df.loc[df['split'] == 1]
+    df_val.reset_index(drop=True, inplace=True)
+    df_test = df.loc[df['split'] == 2]
+    df_test.reset_index(drop=True, inplace=True)
+    
+    # get the image for augmentation
+    path_key = 'filename'
+    path = df_train.iloc[aug_indx][path_key]
+    img_dir = 'img_align_celeba'
+    fp = d / img_dir / path
+    # load it
+    image = Image.open(fp)
+    data = np.asarray(image)
+
+    # get the unique feature and add it to the image
+    data[1:6, 1:6] = artifact * 255
+
+    # log augmented image
+    show_image(data, log_dir=log_dir,
+        message=f'augmented (pre-processed) i={aug_indx}')
+
+    # update the dataframe with the path for the augmented image
+    fp_s = str(fp)
+    aug_path = fp_s.replace('.jpg', '_aug.jpg')
+    df_train.at[aug_indx, path_key] = aug_path
+
+    # save the image under the augmented image path
+    aug_image = Image.fromarray(data)
+    # ensure the image is the same
+    aug_image.save(aug_path, quality=100, subsampling=0)
+
+    datagen = tf.keras.preprocessing.image.ImageDataGenerator(
+        rescale=1./255,
+    )
+    
+    train_generator = datagen.flow_from_dataframe(
+                                                dataframe=df_train,
+                                                directory=d / img_dir, 
+                                                x_col=path_key, y_col="Label",
+                                                seed = 42,
+                                                classes = labels,
+                                                class_mode="sparse",
+                                                target_size=img_size,
+                                                batch_size=batch_size)
+
+    valid_generator = datagen.flow_from_dataframe(
+                                                dataframe=df_val,
+                                                directory=d / img_dir, 
+                                                x_col=path_key, y_col="Label",
+                                                seed = 42,
+                                                classes = labels,
+                                                class_mode="sparse",
+                                                target_size=img_size,
+                                                batch_size=batch_size)   
     
     datasets = train_generator, valid_generator
 

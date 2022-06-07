@@ -25,8 +25,7 @@ from influence import get_hardness
 from influence import get_precomputed_cscore
 from metrics import metric_2, metric_3_alt, metric_7, metric_9, metric_10, metric_11, metric_6, metric_12, metric_13, metric_14, metric_15
 
-
-tf_datasets = ['chexpert']
+tf_datasets= ['chexpert', 'get_celeba_hair_color']
 
 def run(
         exp_name='new_experiment',
@@ -395,6 +394,12 @@ def run(
         ds = get_dataset(indx, artifacter.artifact, batch_size=batch_size, log_dir=log_dir)
         return ds
 
+    def set_batch_position(train_images, train_labels, indx):
+        n_indx = batch_size * batch_position
+        train_images[n_indx], train_images[indx] = train_images[indx], train_images[n_indx] 
+        train_labels[n_indx], train_labels[indx] = train_labels[indx], train_labels[n_indx] 
+        return train_images, train_labels, n_indx
+
     def setup_train_with_augmentation_on_index(indx, run=0, artifact=None, log_dir=None):
 
         ds = get_dataset()
@@ -402,15 +407,13 @@ def run(
         (train_images, train_labels, test_images,
             test_labels) = ds
 
-        # manipulate the batch that the unique feature appears in
+        # manipulate the batch that the unique feature appears. this generates NEW canary index.
         if batch_position is not None:
-            n_indx = batch_size * batch_position
-            train_images[n_indx], train_images[indx] = train_images[indx], train_images[n_indx] 
-            train_labels[n_indx], train_labels[indx] = train_labels[indx], train_labels[n_indx] 
+            train_images, train_labels, indx = set_batch_position(train_images, train_labels, indx)
 
         # re-scale 0-1
-        train_images = train_images / 255.0
-        test_images = test_images / 255.0
+        train_images = train_images.astype(np.float32) / 255.0
+        test_images = test_images.astype(np.float32) / 255.0
 
         # apply augmentation
         if not baseline:
@@ -444,10 +447,10 @@ def run(
 
         log_dir = log_dir_base + f'/{run}/train_with_augmentation_on_index'
 
-        if dataset_name in [tf_datasets]:
-            ds = setup_train_with_augmentation_on_index(indx, run=0, artifact=None, log_dir=log_dir)
-        else:
+        if dataset_name in tf_datasets:
             ds = setup_train_with_augmentation_on_index_tf(indx, run=0, artifact=None, log_dir=log_dir)
+        else:
+            ds = setup_train_with_augmentation_on_index(indx, run=0, artifact=None, log_dir=log_dir)
 
         dataset, dataset_val = ds
 
@@ -487,8 +490,15 @@ def run(
     def get_ground_truth_label(indx):
         # indx: canary index
         # get the canary ground truth label
-        _, train_labels, _, _ = get_dataset()
+        train_images, train_labels, _, _ = get_dataset()
         gt_label = train_labels[indx]
+        
+        # come back to this.
+
+        # manipulate the batch that the unique feature appears in
+        if batch_position is not None:
+            set_batch_position(train_images, train_labels, indx)
+
         return gt_label
     
     def get_ood_labels():

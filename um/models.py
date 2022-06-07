@@ -6,6 +6,8 @@ from tensorflow.keras.layers import AveragePooling2D
 from tensorflow.keras.layers import Input, Flatten, Dropout
 from tensorflow.keras.layers import concatenate, Activation
 from tensorflow.keras.models import Model
+from keras.applications.densenet import DenseNet121
+
 
 # augmentation for mnist
 aug = keras.Sequential([
@@ -405,20 +407,26 @@ def get_dense():
     return model
 
 
-def get_densenet121(input_shape=None, preprocessing=None, n_outputs=None, activation='sigmoid'):
+def get_densenet121(input_shape=None, preprocessing=None, n_outputs=None, activation='sigmoid', weights='imagenet'):
     
-    freeze_cnn = True
+    # train only the classifier layer if we are using pretrained weights
+    if weights is None:
+        freeze_cnn = False
+    else:
+        freeze_cnn = True
 
-    from keras.applications.densenet import DenseNet121
-
-    base_model = DenseNet121(include_top=False, input_shape=input_shape, weights='imagenet')
+    base_model = DenseNet121(include_top=False, input_shape=input_shape, weights=weights)
 
     if freeze_cnn:
         for layer in base_model.layers:
             layer.trainable = False
 
-    model = tf.keras.models.Sequential([
-        preprocessing,
+    model = tf.keras.models.Sequential()
+    
+    if preprocessing is not None:
+        model.add(preprocessing)
+    
+    layers = [
         base_model,
         # Add two layer classifier
         keras.layers.GlobalAveragePooling2D(input_shape=(1024, 1, 1)),
@@ -430,9 +438,11 @@ def get_densenet121(input_shape=None, preprocessing=None, n_outputs=None, activa
         Dense(512, activation='relu'),
         BatchNormalization(),
         Dropout(0.2),
-        # and a logistic layer --  we have 5 classes
         Dense(n_outputs, activation=activation)
-    ])
+    ]
+
+    for lay in layers:
+        model.add(lay)
 
     return model
 
@@ -447,4 +457,78 @@ def get_densenet121_chexpert():
     ])
 
     model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=1, activation='sigmoid')
+    return model
+
+def get_densenet121_caltech101():
+    input_shape = (224, 224, 3)
+    seq = None
+    model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=102, activation='softmax', weights=None)
+    return model
+
+def get_densenet121_celeba_hair_color():
+    input_shape = (224, 224, 3)
+    seq = None
+    model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=4, activation='softmax', weights=None)
+    return model
+
+def get_densenet121_celeba_hair_color_aug():
+    input_shape = (224, 224, 3)
+    seq = tf.keras.Sequential([
+        layers.RandomContrast(0.1, input_shape=input_shape),
+        layers.RandomRotation(0.1),
+        layers.RandomCrop(223, 223),
+        layers.RandomFlip("horizontal"),
+        layers.Resizing(224, 224),
+    ])
+    model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=4, activation='softmax', weights=None)
+    return model
+
+def get_densenet121_celeba_hair_color_pretrained():
+    input_shape = (224, 224, 3)
+    seq = None
+    model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=4, activation='softmax', weights='imagenet')
+    return model
+
+def get_densenet121_celeba_hair_color_pretrained_aug():
+    input_shape = (224, 224, 3)
+    seq = tf.keras.Sequential([
+        layers.RandomContrast(0.1, input_shape=input_shape),
+        layers.RandomRotation(0.1),
+        layers.RandomCrop(223, 223),
+        layers.RandomFlip("horizontal"),
+        layers.Resizing(224, 224),
+    ])
+    model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=4, activation='softmax', weights='imagenet')
+    return model
+
+def get_densenet121_caltech101_aug():
+    input_shape = (224, 224, 3)
+    seq = tf.keras.Sequential([
+        layers.RandomContrast(0.1, input_shape=input_shape),
+        layers.RandomRotation(0.1),
+        layers.RandomCrop(223, 223),
+        layers.RandomFlip("horizontal"),
+        layers.Resizing(224, 224),
+    ])
+    model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=102, activation='softmax', weights=None)
+    return model
+
+def get_densenet121_caltech101_pretrained():
+    input_shape = (224, 224, 3)
+    seq = None
+    model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=102, activation='softmax', weights='imagenet')
+    return model
+
+def get_densenet121_caltech101_pretrained_aug():
+    input_shape = (224, 224, 3)
+
+    seq = tf.keras.Sequential([
+        layers.RandomContrast(0.2, input_shape=input_shape),
+        layers.RandomCrop(223, 223),
+                
+        layers.RandomFlip("horizontal"),
+        layers.Resizing(224, 224),
+    ])
+
+    model = get_densenet121(input_shape=input_shape, preprocessing=seq, n_outputs=102, activation='softmax', weights='imagenet')
     return model
